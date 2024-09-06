@@ -38,7 +38,7 @@ class UpdateMenu extends StatelessWidget {
             ],
           ),
           SizedBox(height: 8),
-          buildMenuButton('Dosyadan Yükle', context),
+          buildMenuButton('Dosyadan Yükle', context, isFirst: true),
           buildMenuButton('Link ile Yükle', context),
           buildMenuButton('QR ile Yükle', context, isLast: true),
         ],
@@ -47,14 +47,17 @@ class UpdateMenu extends StatelessWidget {
   }
 
   ElevatedButton buildMenuButton(String text, BuildContext context,
-      {bool isLast = false}) {
+      {bool isFirst = false, bool isLast = false}) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: Color(0xFFFFCC00), // Sarı renk
         shape: RoundedRectangleBorder(
-          borderRadius: isLast
-              ? BorderRadius.vertical(bottom: Radius.circular(10))
-              : BorderRadius.zero,
+          borderRadius: BorderRadius.only(
+            topLeft: isFirst ? Radius.circular(10) : Radius.zero,
+            topRight: isFirst ? Radius.circular(10) : Radius.zero,
+            bottomLeft: isLast ? Radius.circular(10) : Radius.zero,
+            bottomRight: isLast ? Radius.circular(10) : Radius.zero,
+          ),
         ),
       ),
       onPressed: () {
@@ -68,12 +71,15 @@ class UpdateMenu extends StatelessWidget {
           );
         }
       },
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text,
-          style: TextStyle(color: Colors.black),
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            text,
+            style: TextStyle(color: Colors.black),
+          ),
+          Icon(Icons.arrow_forward_ios, color: Colors.black), // ">" simgesi
+        ],
       ),
     );
   }
