@@ -23,7 +23,7 @@ class UpdateMenu extends StatelessWidget {
               Text(
                 'Yükle',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 22,
                   color: Color(0xFFFFCC00), // Sarı renk
                   fontWeight: FontWeight.bold,
                 ),
