@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:ornek_proje/screens/qr_code_create_choose.dart';
+import 'package:ornek_proje/screens/file_upload.dart';
+import 'package:ornek_proje/screens/link_upload.dart';
+import 'package:ornek_proje/screens/qr_upload.dart';
 
 class UpdateMenu extends StatelessWidget {
   const UpdateMenu({super.key});
@@ -61,12 +63,26 @@ class UpdateMenu extends StatelessWidget {
         ),
       ),
       onPressed: () {
-        // İlgili fonksiyonlar burada çalışacak
+        // İlgili sayfaları açan kodlar
         if (text == 'Dosyadan Yükle') {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => QrCodeCreateChoose(),
+              builder: (context) => FileUpload(),
+            ),
+          );
+        } else if (text == 'Link ile Yükle') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => LinkUpload(),
+            ),
+          );
+        } else if (text == 'QR ile Yükle') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => QrUpload(),
             ),
           );
         }

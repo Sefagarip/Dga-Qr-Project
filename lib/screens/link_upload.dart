@@ -12,14 +12,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:printing/printing.dart';
 import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart';
 
-class QrCodeCreate extends StatefulWidget {
-  const QrCodeCreate({super.key});
+class LinkUpload extends StatefulWidget {
+  const LinkUpload({super.key});
 
   @override
-  _QrCodeCreateState createState() => _QrCodeCreateState();
+  _LinkUploadState createState() => _LinkUploadState();
 }
 
-class _QrCodeCreateState extends State<QrCodeCreate> {
+class _LinkUploadState extends State<LinkUpload> {
   final TextEditingController _controller = TextEditingController();
   String _qrData = "";
   final GlobalKey _qrKey = GlobalKey();

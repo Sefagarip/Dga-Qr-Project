@@ -15,14 +15,14 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
 
-class QrCodeCreateChoose extends StatefulWidget {
-  const QrCodeCreateChoose({super.key});
+class FileUpload extends StatefulWidget {
+  const FileUpload({super.key});
 
   @override
-  _QrCodeCreateChooseState createState() => _QrCodeCreateChooseState();
+  _FileUploadState createState() => _FileUploadState();
 }
 
-class _QrCodeCreateChooseState extends State<QrCodeCreateChoose> {
+class _FileUploadState extends State<FileUpload> {
   GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: [drive.DriveApi.driveFileScope],
   );

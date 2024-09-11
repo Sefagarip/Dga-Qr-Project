@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart'; // PDF önizleme ve önbellekleme için
 
-class QrCodeScan extends StatefulWidget {
-  const QrCodeScan({super.key});
+class QrUpload extends StatefulWidget {
+  const QrUpload({super.key});
 
   @override
-  _QrCodeScanState createState() => _QrCodeScanState();
+  _QrUploadState createState() => _QrUploadState();
 }
 
-class _QrCodeScanState extends State<QrCodeScan> {
+class _QrUploadState extends State<QrUpload> {
   String _scanResult = "Henüz taranmadı";
 
   Future<void> _startScan() async {
