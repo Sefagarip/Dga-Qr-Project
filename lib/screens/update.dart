@@ -10,11 +10,21 @@ class UpdateMenu extends StatefulWidget {
   _UpdateMenuState createState() => _UpdateMenuState();
 }
 
+class PdfItem {
+  final String name;
+  final String url;
+
+  PdfItem({required this.name, required this.url});
+}
+
 class _UpdateMenuState extends State<UpdateMenu> {
+  String pdfName = '';
+  String pdfUrl = '';
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 300,
+      height: 280,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Color(0xFF041a25),
@@ -46,6 +56,7 @@ class _UpdateMenuState extends State<UpdateMenu> {
           buildMenuButton('Dosyadan Yükle', context, isFirst: true),
           buildMenuButton('Link ile Yükle', context),
           buildMenuButton('QR ile Yükle', context, isLast: true),
+          SizedBox(height: 20),
         ],
       ),
     );
@@ -72,12 +83,20 @@ class _UpdateMenuState extends State<UpdateMenu> {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => FileUpload()),
-          );
+          ).then((result) {
+            if (result != null && result is PdfItem) {
+              Navigator.pop(context, result); // PDF'i geri gönder
+            }
+          });
         } else if (text == 'QR ile Yükle') {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => QrUpload()),
-          );
+          ).then((result) {
+            if (result != null && result is PdfItem) {
+              Navigator.pop(context, result); // PDF'i geri gönder
+            }
+          });
         }
       },
       child: Row(
@@ -160,7 +179,14 @@ class _UpdateMenuState extends State<UpdateMenu> {
                         borderRadius: BorderRadius.circular(8.0),
                       ),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
+                      if (linkText.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text('Lütfen geçerli bir URL girin.')),
+                        );
+                        return;
+                      }
                       print("PDF Önizleme Göster butonuna basıldı");
                       print("Gönderilen URL: $linkText");
                       Navigator.pop(context);
@@ -221,14 +247,23 @@ class _UpdateMenuState extends State<UpdateMenu> {
         if (!mounted) return;
 
         print("PdfPreviewScreen oluşturuluyor");
-        final pdfPreviewScreen =
-            PdfPreviewScreen(pdfUrl: formattedUrl, initialPdfName: pdfName);
+        final pdfPreviewScreen = PdfPreviewScreen(
+          pdfUrl: formattedUrl,
+          initialPdfName: pdfName,
+        );
 
         print("Navigator.push çağrılıyor");
-        await Navigator.push(
+        // PdfPreviewScreen'den gelen sonucu bekleyin
+        final result = await Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => pdfPreviewScreen),
         );
+
+        // Eğer kullanıcı kaydettiyse PdfItem olarak geri döner
+        if (result != null && result is PdfItem) {
+          Navigator.pop(context, result); // PdfItem'i geri gönder
+        }
+
         print("Navigator.push tamamlandı");
       } catch (e) {
         print("PDF önizleme hatası: $e");
@@ -278,9 +313,11 @@ class PdfPreviewScreen extends StatefulWidget {
   final String pdfUrl;
   final String initialPdfName;
 
-  PdfPreviewScreen(
-      {Key? key, required this.pdfUrl, required this.initialPdfName})
-      : super(key: key);
+  PdfPreviewScreen({
+    Key? key,
+    required this.pdfUrl,
+    required this.initialPdfName,
+  }) : super(key: key);
 
   @override
   _PdfPreviewScreenState createState() => _PdfPreviewScreenState();
@@ -297,13 +334,8 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    print("PdfPreviewScreen build çağrıldı");
-    print("PDF URL: ${widget.pdfUrl}");
-    print("PDF Name: $pdfName");
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Color(0xFF041a25),
         title: Row(
           children: [
             Expanded(
@@ -319,6 +351,7 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             ),
           ],
         ),
+        backgroundColor: Color(0xFF041a25),
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: Color(0xFFFFCC00)),
           onPressed: () => Navigator.pop(context),
@@ -341,25 +374,42 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    print("Kaydet butonuna basıldı");
-                    Navigator.popUntil(context, (route) => route.isFirst);
-                  },
-                  icon: Icon(Icons.save, color: Colors.black),
-                  label: Text('Kaydet', style: TextStyle(color: Colors.black)),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFFCC00)),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      print("Kaydet butonuna basıldı");
+                      // PdfItem olarak geri gönder
+                      Navigator.pop(
+                          context, PdfItem(name: pdfName, url: widget.pdfUrl));
+                    },
+                    icon: Icon(Icons.save, color: Colors.black),
+                    label:
+                        Text('Kaydet', style: TextStyle(color: Colors.black)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFCC00),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
                 ),
-                ElevatedButton.icon(
-                  onPressed: () {
-                    print("Sil butonuna basıldı");
-                    Navigator.popUntil(context, (route) => route.isFirst);
-                  },
-                  icon: Icon(Icons.delete, color: Colors.black),
-                  label: Text('Sil', style: TextStyle(color: Colors.black)),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFFCC00)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      print("Sil butonuna basıldı");
+                      // Silme işlemi için geri dön
+                      Navigator.pop(context);
+                    },
+                    icon: Icon(Icons.delete, color: Colors.black),
+                    label: Text('Sil', style: TextStyle(color: Colors.black)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFFFCC00),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
