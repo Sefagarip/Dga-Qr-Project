@@ -6,11 +6,10 @@ class UserMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: MediaQuery.of(context).size.height *
-          0.5, // Ekranın %50'si kadar yükseklik
+      height: MediaQuery.of(context).size.height * 0.43,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Color(0xFF041a25), // Mavi renk
+        color: Color(0xFF041a25),
         borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
       ),
       child: Column(
@@ -21,65 +20,101 @@ class UserMenu extends StatelessWidget {
             children: [
               Spacer(),
               Text(
-                'Kullanıcı',
+                '    Kullanıcı',
                 style: TextStyle(
                   fontSize: 22,
-                  color: Color(0xFFFFCC00), // Sarı renk
+                  color: Color(0xFFFFCC00),
                   fontWeight: FontWeight.bold,
                 ),
               ),
               Spacer(),
               IconButton(
-                icon: Icon(Icons.close, color: Color(0xFFFFCC00)), // Sarı renk
-                onPressed: () {
-                  Navigator.pop(context); // Sheet'i kapatır
-                },
+                icon: Icon(Icons.close, color: Color(0xFFFFCC00)),
+                onPressed: () => Navigator.pop(context),
               ),
             ],
           ),
-          SizedBox(height: 8),
-          buildMenuButton('Proje Dizini Seç', context, isTopRound: true),
-          buildMenuButton('Google ile Giriş Yap', context, isBottomRound: true),
-          SizedBox(height: 16), // Boşluk eklemek için
-          buildMenuButton('Geri Bildirim', context, isTopRound: true),
-          buildMenuButton('Online Yardım', context),
-          buildMenuButton('İndirilenler', context, isLast: true),
+          SizedBox(height: 10),
+          Column(
+            children: [
+              _buildUserActionButton(
+                label: 'Proje Dizini Seç',
+                onPressed: () {
+                  // Proje dizini seçme işlevi
+                },
+                isFirst: true,
+              ),
+              SizedBox(height: 1),
+              _buildUserActionButton(
+                label: 'Google ile Giriş Yap',
+                onPressed: () {
+                  // Google ile giriş yapma işlevi
+                },
+                isLast: true, // Bu butonu son buton olarak işaretledik
+              ),
+              SizedBox(height: 16),
+              _buildUserActionButton(
+                label: 'Geri Bildirim',
+                onPressed: () {
+                  // Geri bildirim işlevi
+                },
+                isFirst: true,
+              ),
+              SizedBox(height: 1),
+              _buildUserActionButton(
+                label: 'Online Yardım',
+                onPressed: () {
+                  // Online yardım işlevi
+                },
+              ),
+              SizedBox(height: 1),
+              _buildUserActionButton(
+                label: 'İndirilenler',
+                onPressed: () {
+                  // İndirilenler işlevi
+                },
+                isLast: true,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  ElevatedButton buildMenuButton(String text, BuildContext context,
-      {bool isLast = false,
-      bool isTopRound = false,
-      bool isBottomRound = false}) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Color(0xFFFFCC00), // Sarı renk
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            topLeft: isTopRound ? Radius.circular(10) : Radius.zero,
-            topRight: isTopRound ? Radius.circular(10) : Radius.zero,
-            bottomLeft:
-                isBottomRound || isLast ? Radius.circular(10) : Radius.zero,
-            bottomRight:
-                isBottomRound || isLast ? Radius.circular(10) : Radius.zero,
-          ),
+  Widget _buildUserActionButton({
+    required String label,
+    required VoidCallback onPressed,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: Color(0xFFFFCC00),
+        borderRadius: BorderRadius.vertical(
+          top: isFirst ? Radius.circular(10) : Radius.zero,
+          bottom: isLast ? Radius.circular(10) : Radius.zero,
         ),
       ),
-      onPressed: () {
-        // İlgili fonksiyonlar burada çalışacak
-      },
-      child: Align(
-        alignment: Alignment.centerLeft,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+          ),
+        ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              text,
-              style: TextStyle(color: Colors.black),
+              label,
+              style: TextStyle(color: Color(0xFF041a25), fontSize: 14),
             ),
-            Icon(Icons.arrow_forward_ios, color: Colors.black), // ">" simgesi
+            Icon(Icons.chevron_right, color: Color(0xFF041a25), size: 20),
           ],
         ),
       ),

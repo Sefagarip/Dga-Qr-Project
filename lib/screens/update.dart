@@ -25,7 +25,7 @@ class _UpdateMenuState extends State<UpdateMenu> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 280,
+      height: 230,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Color(0xFF041a25),
@@ -39,7 +39,7 @@ class _UpdateMenuState extends State<UpdateMenu> {
             children: [
               Spacer(),
               Text(
-                'Yükle',
+                '     Yükle',
                 style: TextStyle(
                   fontSize: 22,
                   color: Color(0xFFFFCC00),
@@ -53,52 +53,80 @@ class _UpdateMenuState extends State<UpdateMenu> {
               ),
             ],
           ),
-          SizedBox(height: 8),
-          buildMenuButton('Dosyadan Yükle', context, isFirst: true),
-          buildMenuButton('Link ile Yükle', context),
-          buildMenuButton('QR ile Yükle', context, isLast: true),
-          SizedBox(height: 20),
+          SizedBox(height: 10),
+          Column(
+            children: [
+              _buildUpdateActionButton(
+                label: 'Dosyadan Yükle',
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => FileUpload()),
+                  ).then((result) {
+                    if (result != null && result is PdfItem) {
+                      Navigator.pop(context, result);
+                    }
+                  });
+                },
+                isFirst: true,
+              ),
+              SizedBox(height: 1),
+              _buildUpdateActionButton(
+                label: 'Link ile Yükle',
+                onPressed: () {
+                  _showLinkUploadSheet(context);
+                },
+              ),
+              SizedBox(height: 1),
+              _buildUpdateActionButton(
+                label: 'QR ile Yükle',
+                onPressed: () {
+                  _startQrScan(context);
+                },
+                isLast: true,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  ElevatedButton buildMenuButton(String text, BuildContext context,
-      {bool isFirst = false, bool isLast = false}) {
-    return ElevatedButton(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Color(0xFFFFCC00),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.only(
-            topLeft: isFirst ? Radius.circular(10) : Radius.zero,
-            topRight: isFirst ? Radius.circular(10) : Radius.zero,
-            bottomLeft: isLast ? Radius.circular(10) : Radius.zero,
-            bottomRight: isLast ? Radius.circular(10) : Radius.zero,
-          ),
+  Widget _buildUpdateActionButton({
+    required String label,
+    required VoidCallback onPressed,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: Color(0xFFFFCC00),
+        borderRadius: BorderRadius.vertical(
+          top: isFirst ? Radius.circular(10) : Radius.zero,
+          bottom: isLast ? Radius.circular(10) : Radius.zero,
         ),
       ),
-      onPressed: () {
-        if (text == 'Link ile Yükle') {
-          _showLinkUploadSheet(context);
-        } else if (text == 'Dosyadan Yükle') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => FileUpload()),
-          ).then((result) {
-            if (result != null && result is PdfItem) {
-              Navigator.pop(context, result);
-            }
-          });
-        } else if (text == 'QR ile Yükle') {
-          _startQrScan(context);
-        }
-      },
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(text, style: TextStyle(color: Colors.black)),
-          Icon(Icons.arrow_forward_ios, color: Colors.black),
-        ],
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: TextStyle(color: Color(0xFF041a25), fontSize: 14),
+            ),
+            Icon(Icons.chevron_right, color: Color(0xFF041a25), size: 20),
+          ],
+        ),
       ),
     );
   }
@@ -408,12 +436,6 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           icon: Icon(Icons.arrow_back, color: Color(0xFFFFCC00)),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.qr_code, color: Color(0xFFFFCC00)),
-            onPressed: () => _showQRCode(context),
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -449,6 +471,11 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 _buildActionButton(
+                  icon: Icons.qr_code,
+                  label: 'QR Oluştur',
+                  onPressed: () => _showQRCode(context),
+                ),
+                _buildActionButton(
                   icon: Icons.save,
                   label: 'Kaydet',
                   onPressed: () {
@@ -457,7 +484,6 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                         context, PdfItem(name: pdfName, url: widget.pdfUrl));
                   },
                 ),
-                SizedBox(width: 10),
                 _buildActionButton(
                   icon: Icons.delete,
                   label: 'Sil',
@@ -465,12 +491,6 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                     print("Sil butonuna basıldı");
                     Navigator.pop(context);
                   },
-                ),
-                SizedBox(width: 10),
-                _buildActionButton(
-                  icon: Icons.qr_code,
-                  label: 'QR Göster',
-                  onPressed: () => _showQRCode(context),
                 ),
               ],
             ),
@@ -485,18 +505,15 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
     required String label,
     required VoidCallback onPressed,
   }) {
-    return Expanded(
-      child: ElevatedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, color: Colors.black),
-        label: Text(label, style: TextStyle(color: Colors.black)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Color(0xFFFFCC00),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: Icon(icon, color: Color(0xFFFFCC00)),
+          onPressed: onPressed,
         ),
-      ),
+        Text(label, style: TextStyle(color: Color(0xFFFFCC00))),
+      ],
     );
   }
 
@@ -541,30 +558,47 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   void _showQRCode(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
+          height: 280,
           padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Color(0xFF041a25),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
+          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'QR Kodu',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Spacer(),
+                  Text(
+                    'QR Kodu',
+                    style: TextStyle(
+                      fontSize: 22,
+                      color: Color(0xFFFFCC00),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Color(0xFFFFCC00)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
               SizedBox(height: 20),
-              Container(
-                width: 200,
-                height: 200,
-                child: QrImageView(
-                  data: widget.pdfUrl,
-                  version: QrVersions.auto,
-                  size: 200.0,
+              Expanded(
+                child: Center(
+                  child: QrImageView(
+                    data: widget.pdfUrl,
+                    version: QrVersions.auto,
+                    size: 200.0,
+                    foregroundColor: Color(0xFFFFCC00),
+                  ),
                 ),
               ),
               SizedBox(height: 20),
@@ -610,10 +644,10 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          icon: Icon(icon),
+          icon: Icon(icon, color: Color(0xFFFFCC00)),
           onPressed: onPressed,
         ),
-        Text(label),
+        Text(label, style: TextStyle(color: Color(0xFFFFCC00))),
       ],
     );
   }

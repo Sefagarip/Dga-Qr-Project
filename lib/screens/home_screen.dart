@@ -313,35 +313,49 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showQRCode(BuildContext context, PdfItem pdfItem) {
     showModalBottomSheet(
       context: context,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
+          height: 300, // Yükseklik azaltıldı
           padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Color(0xFF041a25),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
+          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'QR Kodu',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              SizedBox(height: 20),
-              Container(
-                width: 200,
-                height: 200,
-                child: QrImageView(
-                  data: pdfItem.url,
-                  version: QrVersions.auto,
-                  size: 200.0,
-                ),
-              ),
-              SizedBox(height: 20),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Spacer(),
+                  Text(
+                    '       QR Göster',
+                    style: TextStyle(
+                      fontSize: 22,
+                      color: Color(0xFFFFCC00),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Spacer(),
+                  IconButton(
+                    icon: Icon(Icons.close, color: Color(0xFFFFCC00)),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              Expanded(
+                child: Center(
+                  child: QrImageView(
+                    data: pdfItem.url,
+                    version: QrVersions.auto,
+                    size: 100.0, // QR kod boyutu küçültüldü
+                    foregroundColor: Color.fromARGB(255, 255, 255, 255),
+                  ),
+                ),
+              ),
+              Column(
                 children: [
                   _buildQRActionButton(
                     icon: Icons.save,
@@ -349,7 +363,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     onPressed: () {
                       // Kaydetme işlevi buraya eklenecek
                     },
+                    isFirst: true,
                   ),
+                  SizedBox(height: 1),
                   _buildQRActionButton(
                     icon: Icons.share,
                     label: 'Paylaş',
@@ -357,12 +373,14 @@ class _HomeScreenState extends State<HomeScreen> {
                       // Paylaşma işlevi buraya eklenecek
                     },
                   ),
+                  SizedBox(height: 1),
                   _buildQRActionButton(
                     icon: Icons.print,
                     label: 'Yazdır',
                     onPressed: () {
                       // Yazdırma işlevi buraya eklenecek
                     },
+                    isLast: true,
                   ),
                 ],
               ),
@@ -377,16 +395,43 @@ class _HomeScreenState extends State<HomeScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onPressed,
+    bool isFirst = false,
+    bool isLast = false,
   }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: Icon(icon),
-          onPressed: onPressed,
+    return Container(
+      height: 40, // Buton yüksekliği sabit tutuldu
+      decoration: BoxDecoration(
+        color: Color(0xFFFFCC00),
+        borderRadius: BorderRadius.vertical(
+          top: isFirst ? Radius.circular(10) : Radius.zero,
+          bottom: isLast ? Radius.circular(10) : Radius.zero,
         ),
-        Text(label),
-      ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: Color(0xFF041a25), size: 20),
+                SizedBox(width: 8),
+                Text(label,
+                    style: TextStyle(color: Color(0xFF041a25), fontSize: 14)),
+              ],
+            ),
+            Icon(Icons.chevron_right, color: Color(0xFF041a25), size: 20),
+          ],
+        ),
+      ),
     );
   }
 
