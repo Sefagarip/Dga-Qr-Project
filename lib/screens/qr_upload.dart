@@ -1,18 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart'; // PDF önizleme ve önbellekleme için
+import 'package:ornek_proje/screens/update.dart'; // PdfItem ve PdfPreviewScreen için
 
-class QrUpload extends StatefulWidget {
-  const QrUpload({super.key});
+class QrUpload extends StatelessWidget {
+  const QrUpload({Key? key}) : super(key: key);
 
-  @override
-  _QrUploadState createState() => _QrUploadState();
-}
-
-class _QrUploadState extends State<QrUpload> {
-  String _scanResult = "Henüz taranmadı";
-
-  Future<void> _startScan() async {
+  Future<void> _startScan(BuildContext context) async {
     try {
       String scanResult = await FlutterBarcodeScanner.scanBarcode(
         "#ff6666", // Tarama ekranında kullanılacak renk
@@ -21,31 +15,33 @@ class _QrUploadState extends State<QrUpload> {
         ScanMode.QR,
       );
 
-      if (!mounted) return;
-
-      setState(() {
-        _scanResult = scanResult != '-1' ? scanResult : 'Tarama iptal edildi';
-      });
-
-      if (_scanResult != '-1') {
-        String? directLink = _convertToDirectDownloadLink(_scanResult);
+      if (scanResult != '-1') {
+        String? directLink = _convertToDirectDownloadLink(scanResult);
         if (directLink != null) {
+          String pdfName = await _getPdfNameFromUrl(directLink);
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => PDFViewerPage(pdfUrl: directLink),
+              builder: (context) => PdfPreviewScreen(
+                pdfUrl: directLink,
+                initialPdfName: pdfName,
+              ),
             ),
-          );
-        } else {
-          setState(() {
-            _scanResult = 'Desteklenmeyen bir link formatı.';
+          ).then((result) {
+            if (result != null && result is PdfItem) {
+              Navigator.pop(context, result); // PDF'i geri gönder
+            }
           });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Desteklenmeyen bir link formatı.')),
+          );
         }
       }
     } catch (e) {
-      setState(() {
-        _scanResult = 'Tarama başarısız oldu: $e';
-      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Tarama başarısız oldu: $e')),
+      );
     }
   }
 
@@ -59,36 +55,44 @@ class _QrUploadState extends State<QrUpload> {
           ? 'https://drive.google.com/uc?export=download&id=$fileId'
           : null;
     }
-    return null;
+    return url; // Diğer URL'ler için doğrudan URL'yi döndür
+  }
+
+  Future<String> _getPdfNameFromUrl(String url) async {
+    try {
+      Uri uri = Uri.parse(url);
+      if (url.contains('drive.google.com')) {
+        String fileName = uri.queryParameters['title'] ?? 'Document.pdf';
+        if (fileName == 'Document.pdf' && uri.pathSegments.length > 1) {
+          fileName = Uri.decodeComponent(
+              uri.pathSegments[uri.pathSegments.length - 2]);
+        }
+        if (!fileName.toLowerCase().endsWith('.pdf')) {
+          fileName += '.pdf';
+        }
+        return fileName;
+      } else {
+        String fileName = uri.pathSegments.last;
+        return fileName.contains('.')
+            ? Uri.decodeComponent(fileName)
+            : 'Document.pdf';
+      }
+    } catch (e) {
+      print('Error getting PDF name: $e');
+      return 'Document.pdf';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Kamerayı hemen aç
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startScan(context);
+    });
+
+    // Boş bir sayfa döndür, çünkü kamera hemen açılacak
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('QR Kod Tarayıcı'),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Tarama Sonucu:',
-              style: TextStyle(fontSize: 20),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _scanResult,
-              style: const TextStyle(fontSize: 16, color: Colors.blue),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _startScan,
-              child: const Text('QR Kodu Tara'),
-            ),
-          ],
-        ),
-      ),
+      body: Container(),
     );
   }
 }

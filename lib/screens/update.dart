@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:ornek_proje/screens/file_upload.dart';
-import 'package:ornek_proje/screens/qr_upload.dart';
+import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class UpdateMenu extends StatefulWidget {
   const UpdateMenu({Key? key}) : super(key: key);
@@ -85,18 +86,11 @@ class _UpdateMenuState extends State<UpdateMenu> {
             MaterialPageRoute(builder: (context) => FileUpload()),
           ).then((result) {
             if (result != null && result is PdfItem) {
-              Navigator.pop(context, result); // PDF'i geri gönder
+              Navigator.pop(context, result);
             }
           });
         } else if (text == 'QR ile Yükle') {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => QrUpload()),
-          ).then((result) {
-            if (result != null && result is PdfItem) {
-              Navigator.pop(context, result); // PDF'i geri gönder
-            }
-          });
+          _startQrScan(context);
         }
       },
       child: Row(
@@ -253,31 +247,26 @@ class _UpdateMenuState extends State<UpdateMenu> {
         );
 
         print("Navigator.push çağrılıyor");
-        // PdfPreviewScreen'den gelen sonucu bekleyin
         final result = await Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => pdfPreviewScreen),
         );
 
-        // Eğer kullanıcı kaydettiyse PdfItem olarak geri döner
         if (result != null && result is PdfItem) {
-          Navigator.pop(context, result); // PdfItem'i geri gönder
+          Navigator.pop(context, result);
         }
 
         print("Navigator.push tamamlandı");
       } catch (e) {
         print("PDF önizleme hatası: $e");
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PDF önizleme sırasında bir hata oluştu: $e')),
-        );
+        _showErrorInPdfPreview(
+            context, 'PDF önizleme sırasında bir hata oluştu: $e');
       }
     } else {
       print("Geçersiz URL");
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Geçersiz Google Drive PDF linki!')),
-      );
+      _showErrorInPdfPreview(context, 'Geçersiz Google Drive PDF linki!');
     }
   }
 
@@ -307,16 +296,77 @@ class _UpdateMenuState extends State<UpdateMenu> {
     print("URL geçerli mi? $isValid");
     return isValid;
   }
+
+  Future<void> _startQrScan(BuildContext context) async {
+    try {
+      String scanResult = await FlutterBarcodeScanner.scanBarcode(
+        "#ff6666",
+        "İptal",
+        true,
+        ScanMode.QR,
+      );
+
+      if (scanResult != '-1') {
+        String? directLink = _convertToDirectDownloadLink(scanResult);
+        if (directLink != null) {
+          String pdfName = await _getPdfNameFromUrl(directLink);
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PdfPreviewScreen(
+                pdfUrl: directLink,
+                initialPdfName: pdfName,
+              ),
+            ),
+          );
+          if (result != null && result is PdfItem) {
+            Navigator.pop(context, result);
+          }
+        } else {
+          _showErrorInPdfPreview(context, 'Desteklenmeyen bir link formatı.');
+        }
+      }
+    } catch (e) {
+      _showErrorInPdfPreview(context, 'Tarama başarısız oldu: $e');
+    }
+  }
+
+  void _showErrorInPdfPreview(BuildContext context, String errorMessage) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PdfPreviewScreen(
+          pdfUrl: '',
+          initialPdfName: 'Hata',
+          initialErrorMessage: errorMessage,
+        ),
+      ),
+    );
+  }
+
+  String? _convertToDirectDownloadLink(String url) {
+    if (url.contains("dropbox.com")) {
+      return url.replaceFirst(RegExp(r'dl=0$'), 'dl=1');
+    } else if (url.contains("drive.google.com")) {
+      final fileId = RegExp(r'd/([^/]+)').firstMatch(url)?.group(1);
+      return fileId != null
+          ? 'https://drive.google.com/uc?export=download&id=$fileId'
+          : null;
+    }
+    return url;
+  }
 }
 
 class PdfPreviewScreen extends StatefulWidget {
   final String pdfUrl;
   final String initialPdfName;
+  final String? initialErrorMessage;
 
   PdfPreviewScreen({
     Key? key,
     required this.pdfUrl,
     required this.initialPdfName,
+    this.initialErrorMessage,
   }) : super(key: key);
 
   @override
@@ -325,11 +375,13 @@ class PdfPreviewScreen extends StatefulWidget {
 
 class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
   late String pdfName;
+  String? errorMessage;
 
   @override
   void initState() {
     super.initState();
     pdfName = widget.initialPdfName;
+    errorMessage = widget.initialErrorMessage;
   }
 
   @override
@@ -356,17 +408,39 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           icon: Icon(Icons.arrow_back, color: Color(0xFFFFCC00)),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.qr_code, color: Color(0xFFFFCC00)),
+            onPressed: () => _showQRCode(context),
+          ),
+        ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: PDF().cachedFromUrl(
-              widget.pdfUrl,
-              placeholder: (progress) =>
-                  Center(child: Text('$progress % yükleniyor...')),
-              errorWidget: (error) =>
-                  Center(child: Text('PDF yüklenirken hata oluştu: $error')),
-            ),
+            child: errorMessage != null
+                ? Center(
+                    child: Text(
+                      'PDF yüklenirken hata oluştu: $errorMessage',
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : PDF().cachedFromUrl(
+                    widget.pdfUrl,
+                    placeholder: (progress) => Center(
+                      child: CircularProgressIndicator(
+                        value: progress,
+                      ),
+                    ),
+                    errorWidget: (error) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        setState(() => errorMessage = error.toString());
+                      });
+                      return Center(
+                        child: Text('PDF yüklenirken hata oluştu: $error'),
+                      );
+                    },
+                  ),
           ),
           Container(
             color: Color(0xFF041a25),
@@ -374,47 +448,54 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      print("Kaydet butonuna basıldı");
-                      // PdfItem olarak geri gönder
-                      Navigator.pop(
-                          context, PdfItem(name: pdfName, url: widget.pdfUrl));
-                    },
-                    icon: Icon(Icons.save, color: Colors.black),
-                    label:
-                        Text('Kaydet', style: TextStyle(color: Colors.black)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFFCC00),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+                _buildActionButton(
+                  icon: Icons.save,
+                  label: 'Kaydet',
+                  onPressed: () {
+                    print("Kaydet butonuna basıldı");
+                    Navigator.pop(
+                        context, PdfItem(name: pdfName, url: widget.pdfUrl));
+                  },
                 ),
                 SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      print("Sil butonuna basıldı");
-                      // Silme işlemi için geri dön
-                      Navigator.pop(context);
-                    },
-                    icon: Icon(Icons.delete, color: Colors.black),
-                    label: Text('Sil', style: TextStyle(color: Colors.black)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFFFFCC00),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+                _buildActionButton(
+                  icon: Icons.delete,
+                  label: 'Sil',
+                  onPressed: () {
+                    print("Sil butonuna basıldı");
+                    Navigator.pop(context);
+                  },
+                ),
+                SizedBox(width: 10),
+                _buildActionButton(
+                  icon: Icons.qr_code,
+                  label: 'QR Göster',
+                  onPressed: () => _showQRCode(context),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Expanded(
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, color: Colors.black),
+        label: Text(label, style: TextStyle(color: Colors.black)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Color(0xFFFFCC00),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
       ),
     );
   }
@@ -454,6 +535,86 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
           ],
         );
       },
+    );
+  }
+
+  void _showQRCode(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
+      ),
+      builder: (BuildContext context) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'QR Kodu',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 20),
+              Container(
+                width: 200,
+                height: 200,
+                child: QrImageView(
+                  data: widget.pdfUrl,
+                  version: QrVersions.auto,
+                  size: 200.0,
+                ),
+              ),
+              SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildQRActionButton(
+                    icon: Icons.save,
+                    label: 'Kaydet',
+                    onPressed: () {
+                      // Kaydetme işlevi buraya eklenecek
+                    },
+                  ),
+                  _buildQRActionButton(
+                    icon: Icons.share,
+                    label: 'Paylaş',
+                    onPressed: () {
+                      // Paylaşma işlevi buraya eklenecek
+                    },
+                  ),
+                  _buildQRActionButton(
+                    icon: Icons.print,
+                    label: 'Yazdır',
+                    onPressed: () {
+                      // Yazdırma işlevi buraya eklenecek
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildQRActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: Icon(icon),
+          onPressed: onPressed,
+        ),
+        Text(label),
+      ],
     );
   }
 }

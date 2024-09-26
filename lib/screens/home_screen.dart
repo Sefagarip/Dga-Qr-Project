@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ornek_proje/screens/user.dart';
 import 'package:ornek_proje/screens/update.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -13,17 +14,29 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isSearching = false;
   final FocusNode _focusNode = FocusNode();
   List<PdfItem> pdfItems = [];
+  List<PdfItem> filteredPdfItems = [];
   int? expandedIndex;
 
   @override
   void initState() {
     super.initState();
+    filteredPdfItems = pdfItems;
     _focusNode.addListener(() {
       if (!_focusNode.hasFocus) {
         setState(() {
           _isSearching = false;
+          filteredPdfItems = pdfItems;
         });
       }
+    });
+  }
+
+  void _filterPdfItems(String query) {
+    setState(() {
+      filteredPdfItems = pdfItems
+          .where(
+              (item) => item.name.toLowerCase().contains(query.toLowerCase()))
+          .toList();
     });
   }
 
@@ -62,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               contentPadding:
                                   EdgeInsets.symmetric(horizontal: 10),
                             ),
+                            onChanged: _filterPdfItems,
                           ),
                         ),
                       ),
@@ -72,6 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           onPressed: () {
                             setState(() {
                               _isSearching = false;
+                              filteredPdfItems = pdfItems;
                             });
                           },
                         ),
@@ -116,15 +131,15 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         child: Container(
           color: Colors.transparent,
-          child: pdfItems.isEmpty
+          child: filteredPdfItems.isEmpty
               ? Center(
                   child: Text(
-                    'Henüz PDF yüklenmedi',
+                    'Henüz PDF yüklenmedi veya arama sonucu bulunamadı',
                     style: TextStyle(color: Colors.white),
                   ),
                 )
               : ListView.builder(
-                  itemCount: pdfItems.length,
+                  itemCount: filteredPdfItems.length,
                   itemBuilder: (context, index) {
                     return Padding(
                       padding: const EdgeInsets.all(8.0),
@@ -137,7 +152,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           children: [
                             ListTile(
                               title: Text(
-                                pdfItems[index].name,
+                                filteredPdfItems[index].name,
                                 style: TextStyle(color: Color(0xFF041a25)),
                               ),
                               trailing: IconButton(
@@ -169,93 +184,48 @@ class _HomeScreenState extends State<HomeScreen> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceEvenly,
                                   children: [
-                                    Column(
-                                      children: [
-                                        IconButton(
-                                          icon: Icon(Icons.visibility,
-                                              color: Color(0xFF041a25)),
-                                          onPressed: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) =>
-                                                    PdfPreviewScreen(
-                                                  pdfUrl: pdfItems[index].url,
-                                                  initialPdfName:
-                                                      pdfItems[index].name,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          padding: EdgeInsets.zero,
-                                          constraints: BoxConstraints(),
-                                        ),
-                                        Text('Göster',
-                                            style: TextStyle(
-                                                fontSize: 10,
-                                                color: Color(0xFF041a25))),
-                                      ],
+                                    _buildActionButton(
+                                      icon: Icons.qr_code,
+                                      label: 'QR Göster',
+                                      onPressed: () {
+                                        _showQRCode(
+                                            context, filteredPdfItems[index]);
+                                      },
                                     ),
-                                    Column(
-                                      children: [
-                                        IconButton(
-                                          icon: Icon(Icons.delete,
-                                              color: Color(0xFF041a25)),
-                                          onPressed: () {
-                                            setState(() {
-                                              pdfItems.removeAt(index);
-                                              expandedIndex = null;
-                                            });
-                                          },
-                                          padding: EdgeInsets.zero,
-                                          constraints: BoxConstraints(),
-                                        ),
-                                        Text('Sil',
-                                            style: TextStyle(
-                                                fontSize: 10,
-                                                color: Color(0xFF041a25))),
-                                      ],
+                                    _buildActionButton(
+                                      icon: Icons.file_upload,
+                                      label: 'Dışa Aktar',
+                                      onPressed: () {
+                                        // Dışa aktarma işlevi buraya eklenecek
+                                      },
                                     ),
-                                    Column(
-                                      children: [
-                                        IconButton(
-                                          icon: Icon(Icons.qr_code,
-                                              color: Color(0xFF041a25)),
-                                          onPressed: () {
-                                            showDialog(
-                                              context: context,
-                                              builder: (BuildContext context) {
-                                                return AlertDialog(
-                                                  title: Text('QR Kodu'),
-                                                  content: Container(
-                                                    width: 200,
-                                                    height: 200,
-                                                    child: Center(
-                                                      child: Text(
-                                                          'QR Kodu Burada Gösterilecek'),
-                                                    ),
-                                                  ),
-                                                  actions: <Widget>[
-                                                    TextButton(
-                                                      child: Text('Kapat'),
-                                                      onPressed: () {
-                                                        Navigator.of(context)
-                                                            .pop();
-                                                      },
-                                                    ),
-                                                  ],
-                                                );
-                                              },
-                                            );
-                                          },
-                                          padding: EdgeInsets.zero,
-                                          constraints: BoxConstraints(),
-                                        ),
-                                        Text('QR Göster',
-                                            style: TextStyle(
-                                                fontSize: 10,
-                                                color: Color(0xFF041a25))),
-                                      ],
+                                    _buildActionButton(
+                                      icon: Icons.visibility,
+                                      label: 'Göster',
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                PdfPreviewScreen(
+                                              pdfUrl:
+                                                  filteredPdfItems[index].url,
+                                              initialPdfName:
+                                                  filteredPdfItems[index].name,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    _buildActionButton(
+                                      icon: Icons.delete,
+                                      label: 'Sil',
+                                      onPressed: () {
+                                        setState(() {
+                                          pdfItems.removeAt(index);
+                                          expandedIndex = null;
+                                        });
+                                      },
                                     ),
                                   ],
                                 ),
@@ -337,6 +307,107 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showQRCode(BuildContext context, PdfItem pdfItem) {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
+      ),
+      builder: (BuildContext context) {
+        return Container(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'QR Kodu',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              SizedBox(height: 20),
+              Container(
+                width: 200,
+                height: 200,
+                child: QrImageView(
+                  data: pdfItem.url,
+                  version: QrVersions.auto,
+                  size: 200.0,
+                ),
+              ),
+              SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildQRActionButton(
+                    icon: Icons.save,
+                    label: 'Kaydet',
+                    onPressed: () {
+                      // Kaydetme işlevi buraya eklenecek
+                    },
+                  ),
+                  _buildQRActionButton(
+                    icon: Icons.share,
+                    label: 'Paylaş',
+                    onPressed: () {
+                      // Paylaşma işlevi buraya eklenecek
+                    },
+                  ),
+                  _buildQRActionButton(
+                    icon: Icons.print,
+                    label: 'Yazdır',
+                    onPressed: () {
+                      // Yazdırma işlevi buraya eklenecek
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildQRActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: Icon(icon),
+          onPressed: onPressed,
+        ),
+        Text(label),
+      ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return Column(
+      children: [
+        IconButton(
+          icon: Icon(icon, color: Color(0xFF041a25)),
+          onPressed: onPressed,
+          padding: EdgeInsets.zero,
+          constraints: BoxConstraints(),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 10, color: Color(0xFF041a25)),
+        ),
+      ],
     );
   }
 }
