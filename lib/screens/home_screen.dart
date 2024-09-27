@@ -7,10 +7,16 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:image_gallery_saver/image_gallery_saver.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:open_file/open_file.dart';
+import 'package:cross_file/cross_file.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -206,7 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       icon: Icons.file_upload,
                                       label: 'Dışa Aktar',
                                       onPressed: () {
-                                        // Dışa aktarma işlevi buraya eklenecek
+                                        _exportPdf(filteredPdfItems[index]);
                                       },
                                     ),
                                     _buildActionButton(
@@ -322,13 +328,17 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showQRCode(BuildContext context, PdfItem pdfItem) {
+    String correctedUrl = pdfItem.url.replaceAll(
+        'https://drive.google.com/uc?export=download&id=',
+        'https://drive.google.com/file/d/');
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
-          height: 320, // Yüksekliği biraz artırdık
+          height: 320,
           padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Color(0xFF041a25),
@@ -363,7 +373,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Container(
                       color: Colors.white,
                       child: QrImageView(
-                        data: pdfItem.url,
+                        data: correctedUrl,
                         version: QrVersions.auto,
                         size: 100.0,
                       ),
@@ -371,8 +381,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              SizedBox(
-                  height: 20), // QR kod ile butonlar arasına boşluk ekledik
+              SizedBox(height: 20),
               Column(
                 children: [
                   _buildQRActionButton(
@@ -385,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _buildQRActionButton(
                     icon: Icons.share,
                     label: 'Paylaş',
-                    onPressed: () => _shareQrCode(pdfItem.url),
+                    onPressed: () => _shareQrCode(correctedUrl),
                   ),
                   SizedBox(height: 1),
                   _buildQRActionButton(
@@ -414,28 +423,44 @@ class _HomeScreenState extends State<HomeScreen> {
             await image.toByteData(format: ui.ImageByteFormat.png);
         final Uint8List buffer = byteData!.buffer.asUint8List();
 
-        final result =
-            await ImageGallerySaver.saveImage(buffer, name: '${fileName}_qr');
+        final result = await ImageGallerySaver.saveImage(
+          buffer,
+          quality: 100,
+          name: "${fileName}_qr.png",
+        );
+
         if (result['isSuccess']) {
-          // SnackBar'ı ön plana getirmek için Navigator.pop'tan sonra gösteriyoruz
-          Navigator.of(context).pop(); // Modal bottom sheet'i kapat
+          Navigator.pop(context); // Önce modal bottom sheet'i kapat
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('QR kodu galeriye kaydedildi!'),
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text('QR kodu başarıyla galeriye kaydedildi!'),
+              duration: Duration(seconds: 1),
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.all(20),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              backgroundColor: Color.fromARGB(255, 7, 44, 62),
+              elevation: 6,
             ),
           );
         } else {
-          throw 'Kaydetme başarısız oldu';
+          throw Exception('QR kodu kaydedilemedi');
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Galeriye kaydetme izni verilmedi!')),
+          SnackBar(
+            content: Text('Depolama izni verilmedi!'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata: $e')),
+        SnackBar(
+          content: Text('Hata: $e'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }
@@ -538,5 +563,59 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ],
     );
+  }
+
+  Future<bool> _requestStoragePermission() async {
+    if (await Permission.storage.isGranted) {
+      return true;
+    } else {
+      var status = await Permission.storage.request();
+      if (status.isGranted) {
+        return true;
+      } else {
+        return false;
+      }
+    }
+  }
+
+  Future<void> _exportPdf(PdfItem pdfItem) async {
+    if (!await _requestStoragePermission()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Depolama izni verilmedi. Dosya kaydedilemez.')),
+      );
+      return;
+    }
+
+    try {
+      // URL'den dosyayı indir
+      final response = await http.get(Uri.parse(pdfItem.url));
+      if (response.statusCode != 200) {
+        throw Exception('Dosya indirilemedi');
+      }
+
+      // Geçici dosya oluştur
+      final tempDir = await getTemporaryDirectory();
+      File tempFile = File('${tempDir.path}/${pdfItem.name}');
+      await tempFile.writeAsBytes(response.bodyBytes);
+
+      // Dosyayı paylaş
+      final xFile = XFile(tempFile.path);
+      final result = await Share.shareXFiles([xFile], text: 'PDF Dosyası');
+
+      // Geçici dosyayı sil
+      await tempFile.delete();
+
+      if (result.status == ShareResultStatus.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PDF başarıyla paylaşıldı')),
+        );
+      } else {
+        throw Exception('Dosya paylaşılamadı');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Dışa aktarma sırasında bir hata oluştu: $e')),
+      );
+    }
   }
 }
