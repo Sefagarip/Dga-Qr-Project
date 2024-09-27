@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:ornek_proje/screens/user.dart';
 import 'package:ornek_proje/screens/update.dart';
+import 'package:pdf/pdf.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:printing/printing.dart';
+import 'package:share_plus/share_plus.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -16,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<PdfItem> pdfItems = [];
   List<PdfItem> filteredPdfItems = [];
   int? expandedIndex;
+  final GlobalKey _qrKey = GlobalKey();
 
   @override
   void initState() {
@@ -212,6 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   filteredPdfItems[index].url,
                                               initialPdfName:
                                                   filteredPdfItems[index].name,
+                                              isViewOnly: true,
                                             ),
                                           ),
                                         );
@@ -317,7 +328,7 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
-          height: 300, // Yükseklik azaltıldı
+          height: 320, // Yüksekliği biraz artırdık
           padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Color(0xFF041a25),
@@ -347,39 +358,40 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Expanded(
                 child: Center(
-                  child: QrImageView(
-                    data: pdfItem.url,
-                    version: QrVersions.auto,
-                    size: 100.0, // QR kod boyutu küçültüldü
-                    foregroundColor: Color.fromARGB(255, 255, 255, 255),
+                  child: RepaintBoundary(
+                    key: _qrKey,
+                    child: Container(
+                      color: Colors.white,
+                      child: QrImageView(
+                        data: pdfItem.url,
+                        version: QrVersions.auto,
+                        size: 100.0,
+                      ),
+                    ),
                   ),
                 ),
               ),
+              SizedBox(
+                  height: 20), // QR kod ile butonlar arasına boşluk ekledik
               Column(
                 children: [
                   _buildQRActionButton(
                     icon: Icons.save,
                     label: 'Kaydet',
-                    onPressed: () {
-                      // Kaydetme işlevi buraya eklenecek
-                    },
+                    onPressed: () => _saveQrCode(context, pdfItem.name),
                     isFirst: true,
                   ),
                   SizedBox(height: 1),
                   _buildQRActionButton(
                     icon: Icons.share,
                     label: 'Paylaş',
-                    onPressed: () {
-                      // Paylaşma işlevi buraya eklenecek
-                    },
+                    onPressed: () => _shareQrCode(pdfItem.url),
                   ),
                   SizedBox(height: 1),
                   _buildQRActionButton(
                     icon: Icons.print,
                     label: 'Yazdır',
-                    onPressed: () {
-                      // Yazdırma işlevi buraya eklenecek
-                    },
+                    onPressed: _printQrCode,
                     isLast: true,
                   ),
                 ],
@@ -391,6 +403,78 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _saveQrCode(BuildContext context, String fileName) async {
+    try {
+      var status = await Permission.storage.request();
+      if (status.isGranted) {
+        final RenderRepaintBoundary boundary =
+            _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+        final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+        final ByteData? byteData =
+            await image.toByteData(format: ui.ImageByteFormat.png);
+        final Uint8List buffer = byteData!.buffer.asUint8List();
+
+        final result =
+            await ImageGallerySaver.saveImage(buffer, name: '${fileName}_qr');
+        if (result['isSuccess']) {
+          // SnackBar'ı ön plana getirmek için Navigator.pop'tan sonra gösteriyoruz
+          Navigator.of(context).pop(); // Modal bottom sheet'i kapat
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('QR kodu galeriye kaydedildi!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        } else {
+          throw 'Kaydetme başarısız oldu';
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Galeriye kaydetme izni verilmedi!')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Hata: $e')),
+      );
+    }
+  }
+
+  Future<void> _printQrCode() async {
+    try {
+      final RenderRepaintBoundary boundary =
+          _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      final Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+      await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async {
+          final pw.Document doc = pw.Document();
+          doc.addPage(
+            pw.Page(
+              build: (context) {
+                return pw.Center(
+                  child: pw.Image(pw.MemoryImage(pngBytes)),
+                );
+              },
+            ),
+          );
+          return doc.save();
+        },
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Yazdırma hatası: $e')),
+      );
+    }
+  }
+
+  void _shareQrCode(String url) {
+    Share.share('PDF Linki: $url', subject: 'QR Kod Paylaşımı');
+  }
+
   Widget _buildQRActionButton({
     required IconData icon,
     required String label,
@@ -399,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
     bool isLast = false,
   }) {
     return Container(
-      height: 40, // Buton yüksekliği sabit tutuldu
+      height: 40,
       decoration: BoxDecoration(
         color: Color(0xFFFFCC00),
         borderRadius: BorderRadius.vertical(
