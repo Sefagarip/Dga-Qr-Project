@@ -1,7 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class UserMenu extends StatelessWidget {
-  const UserMenu({super.key});
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  );
+
+  UserMenu({Key? key}) : super(key: key);
+
+  Future<void> _handleSignIn(BuildContext context) async {
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('${account.displayName} olarak giriş yapıldı')),
+        );
+        Navigator.pop(context); // Menüyü kapat
+      }
+    } catch (error) {
+      print(error);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Giriş yapılırken bir hata oluştu')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,9 +70,7 @@ class UserMenu extends StatelessWidget {
               SizedBox(height: 1),
               _buildUserActionButton(
                 label: 'Google ile Giriş Yap',
-                onPressed: () {
-                  // Google ile giriş yapma işlevi
-                },
+                onPressed: () => _handleSignIn(context),
                 isLast: true, // Bu butonu son buton olarak işaretledik
               ),
               SizedBox(height: 16),

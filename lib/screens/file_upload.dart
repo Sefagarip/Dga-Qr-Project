@@ -1,202 +1,188 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:pdf/widgets.dart' as pdf;
-import 'package:pdf/pdf.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:printing/printing.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
+import 'package:ornek_proje/screens/update.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart';
 
 class FileUpload extends StatefulWidget {
-  const FileUpload({super.key});
+  const FileUpload({Key? key}) : super(key: key);
 
   @override
   _FileUploadState createState() => _FileUploadState();
 }
 
 class _FileUploadState extends State<FileUpload> {
-  GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: [drive.DriveApi.driveFileScope],
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: [drive.DriveApi.driveReadonlyScope],
   );
-  GoogleSignInAccount? _currentUser;
-  String? _selectedPdfLink;
-  final GlobalKey _qrKey = GlobalKey();
+  drive.DriveApi? _driveApi;
 
   @override
   void initState() {
     super.initState();
-    _googleSignIn.signInSilently();
+    _initializeDriveApi();
   }
 
-  Future<void> _selectPdfAndGenerateQrCode() async {
-    final user = await _googleSignIn.signIn();
-    if (user == null) return;
-    _currentUser = user;
+  Future<void> _initializeDriveApi() async {
+    final googleUser = await _googleSignIn.signInSilently();
+    if (googleUser != null) {
+      final googleAuth = await googleUser.authentication;
+      final authHeaders = await googleUser.authHeaders;
+      final authenticatedClient = GoogleAuthClient(authHeaders);
+      _driveApi = drive.DriveApi(authenticatedClient);
+    }
+  }
 
-    final authHeaders = await _currentUser!.authHeaders;
-    final client = http.Client();
-    final authenticatedClient = AuthenticatedClient(client, authHeaders);
-    final driveApi = drive.DriveApi(authenticatedClient);
-    final fileList = await driveApi.files.list(q: "mimeType='application/pdf'");
+  Future<void> _listAndSelectPdf(BuildContext context) async {
+    if (_driveApi == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Lütfen önce Google hesabınıza giriş yapın')),
+      );
+      return;
+    }
 
-    final selectedFile = await showDialog<drive.File>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text('PDF Seç'),
+    try {
+      final files = await _driveApi!.files.list(
+        q: "mimeType='application/pdf'",
+        $fields: "files(id, name)",
+      );
+
+      if (files.files == null || files.files!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Hiç PDF dosyası bulunamadı')),
+        );
+        return;
+      }
+
+      final selectedFile = await showDialog<drive.File>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('PDF Seçin'),
           content: SizedBox(
             width: double.maxFinite,
             height: 300,
             child: ListView.builder(
-              itemCount: fileList.files!.length,
+              itemCount: files.files!.length,
               itemBuilder: (context, index) {
-                final file = fileList.files![index];
+                final file = files.files![index];
                 return ListTile(
-                  title: Text(file.name!),
-                  onTap: () {
-                    Navigator.of(context).pop(file);
-                  },
+                  title: Text(file.name ?? 'İsimsiz Dosya'),
+                  onTap: () => Navigator.of(context).pop(file),
                 );
               },
             ),
           ),
-        );
-      },
-    );
+        ),
+      );
 
-    if (selectedFile == null) return;
-
-    final shareableLink = await driveApi.files
-        .get(selectedFile.id!, $fields: 'webViewLink') as drive.File;
-
-    setState(() {
-      _selectedPdfLink = shareableLink.webViewLink!;
-    });
-  }
-
-  Future<void> _saveQrCode() async {
-    try {
-      var status = await Permission.storage.request();
-      if (status.isGranted) {
-        final RenderRepaintBoundary boundary =
-            _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-        final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-        final ByteData? byteData =
-            await image.toByteData(format: ui.ImageByteFormat.png);
-        final Uint8List buffer = byteData!.buffer.asUint8List();
-
-        final directory = await getTemporaryDirectory();
-        final path = '${directory.path}/qrcode.png';
-        final file = File(path);
-        await file.writeAsBytes(buffer);
-
-        final result = await ImageGallerySaver.saveFile(file.path);
-        if (result['isSuccess']) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('QR kodu galeriye kaydedildi!')),
-          );
-        } else {
-          throw 'Kaydetme başarısız oldu';
+      if (selectedFile != null) {
+        final tempFile = await _downloadAndSavePdf(selectedFile);
+        if (tempFile != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => PdfPreviewScreen(
+                pdfFile: tempFile,
+                pdfName: selectedFile.name!,
+              ),
+            ),
+          ).then((result) {
+            if (result != null && result is PdfItem) {
+              Navigator.pop(context, result);
+            }
+          });
         }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Galeriye kaydetme izni verilmedi!')),
-        );
       }
     } catch (e) {
+      print('PDF listeleme hatası: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Hata: $e')),
+        SnackBar(content: Text('PDF dosyaları listelenirken bir hata oluştu')),
       );
     }
   }
 
-  Future<void> _printQrCode() async {
+  Future<File?> _downloadAndSavePdf(drive.File file) async {
     try {
-      final RenderRepaintBoundary boundary =
-          _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final ByteData? byteData =
-          await image.toByteData(format: ui.ImageByteFormat.png);
-      final Uint8List pngBytes = byteData!.buffer.asUint8List();
-
-      await Printing.layoutPdf(
-        onLayout: (PdfPageFormat format) async {
-          final pdf.Document doc = pdf.Document();
-          doc.addPage(
-            pdf.Page(
-              build: (context) {
-                return pdf.Center(
-                  child: pdf.Image(pdf.MemoryImage(pngBytes)),
-                );
-              },
-            ),
-          );
-          return doc.save();
-        },
-      );
+      final content = await _driveApi!.files.get(file.id!,
+          downloadOptions: drive.DownloadOptions.fullMedia) as drive.Media;
+      final bytes = await _streamToUint8List(content.stream);
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/${file.name}');
+      await tempFile.writeAsBytes(bytes);
+      return tempFile;
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Yazdırma hatası: $e')),
-      );
+      print('PDF indirme hatası: $e');
+      return null;
     }
+  }
+
+  Future<Uint8List> _streamToUint8List(Stream<List<int>> stream) async {
+    final chunks = await stream.toList();
+    return Uint8List.fromList(chunks.expand((x) => x).toList());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('QR Kod Oluşturucu')),
+      appBar: AppBar(title: Text('PDF Seç')),
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: _selectPdfAndGenerateQrCode,
-              child: Text('PDF Seç'),
-            ),
-            if (_selectedPdfLink != null)
-              RepaintBoundary(
-                key: _qrKey,
-                child: QrImageView(
-                  data: _selectedPdfLink!,
-                  version: QrVersions.auto,
-                  size: 200.0,
-                ),
-              ),
-            if (_selectedPdfLink != null) ...[
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _saveQrCode,
-                child: const Text('QR Kodunu Kaydet'),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _printQrCode,
-                child: const Text('QR Kodunu Yazdır'),
-              ),
-            ],
-          ],
+        child: ElevatedButton(
+          onPressed: () => _listAndSelectPdf(context),
+          child: Text('PDF Dosyalarını Listele'),
         ),
       ),
     );
   }
 }
 
-class AuthenticatedClient extends http.BaseClient {
-  final http.Client _client;
+class GoogleAuthClient extends http.BaseClient {
   final Map<String, String> _headers;
+  final http.Client _client = http.Client();
 
-  AuthenticatedClient(this._client, this._headers);
+  GoogleAuthClient(this._headers);
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) {
     return _client.send(request..headers.addAll(_headers));
+  }
+}
+
+class PdfPreviewScreen extends StatelessWidget {
+  final File pdfFile;
+  final String pdfName;
+
+  const PdfPreviewScreen(
+      {Key? key, required this.pdfFile, required this.pdfName})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(pdfName),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.save),
+            onPressed: () {
+              Navigator.pop(context, PdfItem(name: pdfName, url: pdfFile.path));
+            },
+          ),
+          IconButton(
+            icon: Icon(Icons.share),
+            onPressed: () {
+              final xFile = XFile(pdfFile.path);
+              Share.shareXFiles([xFile], text: 'PDF Dosyası: $pdfName');
+            },
+          ),
+        ],
+      ),
+      body: SfPdfViewer.file(pdfFile),
+    );
   }
 }
