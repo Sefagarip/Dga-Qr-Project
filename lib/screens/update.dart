@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:ornek_proje/screens/file_upload.dart';
 import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart';
 import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:googleapis/drive/v3.dart' as drive;
+import 'package:http/http.dart' as http;
+import 'package:ornek_proje/screens/user.dart';
 
 class UpdateMenu extends StatefulWidget {
   const UpdateMenu({Key? key}) : super(key: key);
@@ -20,6 +23,10 @@ class PdfItem {
 class _UpdateMenuState extends State<UpdateMenu> {
   String pdfName = '';
   String pdfUrl = '';
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -58,14 +65,7 @@ class _UpdateMenuState extends State<UpdateMenu> {
               _buildUpdateActionButton(
                 label: 'Dosyadan Yükle',
                 onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => FileUpload()),
-                  ).then((result) {
-                    if (result != null && result is PdfItem) {
-                      Navigator.pop(context, result);
-                    }
-                  });
+                  _showGoogleDrivePdfList(context);
                 },
                 isFirst: true,
               ),
@@ -383,6 +383,176 @@ class _UpdateMenuState extends State<UpdateMenu> {
     }
     return url;
   }
+
+  // Google Drive PDF listesini gösteren yeni fonksiyon
+  void _showGoogleDrivePdfList(BuildContext context) async {
+    // Google hesabı kontrolü
+    final googleAccount = await _checkGoogleAccount();
+    if (googleAccount == null) {
+      _showSignInDialog(context);
+      return;
+    }
+
+    // Google Drive'dan PDF listesini al
+    final pdfList = await _getGoogleDrivePdfList(googleAccount);
+
+    // PDF listesini göster
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Color(0xFF041a25),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
+      ),
+      builder: (BuildContext context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.42,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Google Drive PDF\'leri',
+                      style: TextStyle(
+                        color: Color(0xFFFFCC00),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Color(0xFFFFCC00)),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: pdfList.length,
+                  itemBuilder: (context, index) {
+                    final pdf = pdfList[index];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 4.0),
+                      child: Container(
+                        height: 40, // Yükle sayfasındaki gibi yükseklik
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFFCC00),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              Navigator.pop(context);
+                              _previewPdf(pdf.url);
+                            },
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      pdf.name,
+                                      style: TextStyle(
+                                          color: Color(0xFF041a25),
+                                          fontSize: 14),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Icon(Icons.chevron_right,
+                                      color: Color(0xFF041a25), size: 20),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSignInDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Google Hesabı Gerekli'),
+          content: Text(
+              'Google Drive\'dan PDF yüklemek için önce Google hesabınızla giriş yapmanız gerekmektedir.'),
+          actions: <Widget>[
+            TextButton(
+              child: Text('İptal'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('Giriş Yap'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop(); // UpdateMenu'yü kapat
+                _openUserMenu(context);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _openUserMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(25.0)),
+      ),
+      builder: (BuildContext context) {
+        return UserMenu();
+      },
+    );
+  }
+
+  // Google hesabı kontrolü için yeni fonksiyon
+  Future<GoogleSignInAccount?> _checkGoogleAccount() async {
+    GoogleSignInAccount? account = await _googleSignIn.signInSilently();
+    return account;
+  }
+
+  // Google Drive'dan PDF listesini almak için yeni fonksiyon
+  Future<List<PdfItem>> _getGoogleDrivePdfList(
+      GoogleSignInAccount account) async {
+    final headers = await account.authHeaders;
+    final client = GoogleHttpClient(headers);
+    final driveApi = drive.DriveApi(client);
+
+    final fileList = await driveApi.files.list(
+      q: "mimeType='application/pdf'",
+      spaces: 'drive',
+      $fields: 'files(id, name, webViewLink)',
+    );
+
+    return fileList.files!
+        .map((file) => PdfItem(
+              name: file.name ?? 'Adsız PDF',
+              url: file.webViewLink ?? '',
+            ))
+        .toList();
+  }
 }
 
 class PdfPreviewScreen extends StatefulWidget {
@@ -548,5 +718,18 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
         );
       },
     );
+  }
+}
+
+class GoogleHttpClient extends http.BaseClient {
+  final Map<String, String> _headers;
+  final http.Client _client = http.Client();
+
+  GoogleHttpClient(this._headers);
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.headers.addAll(_headers);
+    return _client.send(request);
   }
 }

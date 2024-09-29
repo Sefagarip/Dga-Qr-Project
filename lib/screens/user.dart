@@ -1,15 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
-class UserMenu extends StatelessWidget {
+class UserMenu extends StatefulWidget {
+  UserMenu({Key? key}) : super(key: key);
+
+  @override
+  _UserMenuState createState() => _UserMenuState();
+}
+
+class _UserMenuState extends State<UserMenu> {
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['https://www.googleapis.com/auth/drive.readonly'],
   );
 
-  UserMenu({Key? key}) : super(key: key);
+  GoogleSignInAccount? _currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) {
+      setState(() {
+        _currentUser = account;
+      });
+    });
+    _googleSignIn.signInSilently();
+  }
 
   Future<void> _handleSignIn(BuildContext context) async {
     try {
+      await _googleSignIn.signOut();
       final account = await _googleSignIn.signIn();
       if (account != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -69,7 +88,9 @@ class UserMenu extends StatelessWidget {
               ),
               SizedBox(height: 1),
               _buildUserActionButton(
-                label: 'Google ile Giriş Yap',
+                label: _currentUser == null
+                    ? 'Google ile Giriş Yap'
+                    : '${_currentUser!.displayName} (Değiştir)',
                 onPressed: () => _handleSignIn(context),
                 isLast: true, // Bu butonu son buton olarak işaretledik
               ),
