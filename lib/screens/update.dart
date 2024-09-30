@@ -4,6 +4,7 @@ import 'package:flutter_cached_pdfview/flutter_cached_pdfview.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/drive/v3.dart' as drive;
 import 'package:http/http.dart' as http;
+import 'package:ornek_proje/screens/database_helper.dart';
 import 'package:ornek_proje/screens/user.dart';
 
 class UpdateMenu extends StatefulWidget {
@@ -641,10 +642,11 @@ class _PdfPreviewScreenState extends State<PdfPreviewScreen> {
                   _buildActionButton(
                     icon: Icons.save,
                     label: 'Kaydet',
-                    onPressed: () {
+                    onPressed: () async {
                       print("Kaydet butonuna basıldı");
-                      Navigator.pop(
-                          context, PdfItem(name: pdfName, url: widget.pdfUrl));
+                      final newPdf = PdfItem(name: pdfName, url: widget.pdfUrl);
+                      await DatabaseHelper.instance.insertPdf(newPdf);
+                      Navigator.pop(context, newPdf);
                     },
                   ),
                   SizedBox(width: 50),

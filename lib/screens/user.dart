@@ -31,11 +31,13 @@ class _UserMenuState extends State<UserMenu> {
       await _googleSignIn.signOut();
       final account = await _googleSignIn.signIn();
       if (account != null) {
+        // Önce SnackBar'ı göster
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text('${account.displayName} olarak giriş yapıldı')),
         );
-        Navigator.pop(context); // Menüyü kapat
+        // Sonra menüyü kapat
+        Navigator.pop(context);
       }
     } catch (error) {
       print(error);

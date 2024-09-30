@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ornek_proje/screens/database_helper.dart';
 import 'package:ornek_proje/screens/user.dart';
 import 'package:ornek_proje/screens/update.dart';
 import 'package:pdf/pdf.dart';
@@ -35,7 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    filteredPdfItems = pdfItems;
+    _loadPdfs();
     _focusNode.addListener(() {
       if (!_focusNode.hasFocus) {
         setState(() {
@@ -43,6 +44,14 @@ class _HomeScreenState extends State<HomeScreen> {
           filteredPdfItems = pdfItems;
         });
       }
+    });
+  }
+
+  Future<void> _loadPdfs() async {
+    final loadedPdfs = await DatabaseHelper.instance.getAllPdfs();
+    setState(() {
+      pdfItems = loadedPdfs;
+      filteredPdfItems = pdfItems;
     });
   }
 
@@ -236,9 +245,12 @@ class _HomeScreenState extends State<HomeScreen> {
                                     _buildActionButton(
                                       icon: Icons.delete,
                                       label: 'Sil',
-                                      onPressed: () {
+                                      onPressed: () async {
+                                        await DatabaseHelper.instance
+                                            .deletePdf(index);
                                         setState(() {
                                           pdfItems.removeAt(index);
+                                          filteredPdfItems = pdfItems;
                                           expandedIndex = null;
                                         });
                                       },
